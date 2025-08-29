@@ -1,0 +1,20 @@
+FROM python:3.9-slim
+
+# Install PostgreSQL client and Python dependencies
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create PostGIS extension and run migrations
+CMD ["sh", "-c", "echo 'Waiting for database...' && sleep 5 && echo 'Creating PostGIS extension...' && PGPASSWORD=dev psql -h postgres -U dev -d sporter -c 'CREATE EXTENSION IF NOT EXISTS postgis;' && echo 'Running Alembic migrations...' && alembic upgrade head && echo '✅ Migration completed successfully'"]

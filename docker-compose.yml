@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_DB: sporter
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d sporter"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sporter-net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - sporter-net
+
+  migrate:
+    build: 
+      context: .
+      dockerfile: Dockerfile.migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://dev:dev@postgres:5432/sporter
+    volumes:
+      - .:/app
+    working_dir: /app
+    networks:
+      - sporter-net
+    profiles:
+      - migration
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  sporter-net:
+    driver: bridge
