@@ -18,8 +18,9 @@ def get_async_session_local():
 
 # Sync engine and session for CLI scripts
 def get_sync_engine():
-    # Use localhost connection for CLI scripts (not Docker network)
-    sync_url = "postgresql+psycopg2://dev:dev@localhost:5432/sporter"
+    # Use environment variable or default to Docker network
+    import os
+    sync_url = os.getenv("DATABASE_URL", "postgresql+psycopg2://dev:dev@postgres:5432/sporter")
     return create_engine(sync_url, echo=True)
 
 def get_sync_session_local():
