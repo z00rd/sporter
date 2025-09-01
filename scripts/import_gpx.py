@@ -57,9 +57,12 @@ class GPXParser:
         name_elem = track.find('gpx:name', self.ns)
         activity_name = name_elem.text if name_elem is not None else Path(gpx_path).stem
         
+        # Auto-detect activity type
+        activity_type = self._detect_activity_type(track, activity_name, gpx_path)
+        
         return {
             'name': activity_name,
-            'activity_type': 'running',  # Default, could be inferred later
+            'activity_type': activity_type,
             'gpx_file_path': str(gpx_path)
         }
     
@@ -202,6 +205,97 @@ class GPXParser:
         c = 2 * atan2(sqrt(a), sqrt(1-a))
         
         return R * c
+    
+    def _detect_activity_type(self, track, activity_name: str, gpx_path: str) -> str:
+        """Auto-detect activity type from GPX metadata, filename, and movement patterns"""
+        
+        # 1. Check GPX metadata/extensions first
+        activity_type = self._get_activity_type_from_metadata(track)
+        if activity_type:
+            return activity_type
+        
+        # 2. Check filename patterns
+        activity_type = self._get_activity_type_from_filename(activity_name, gpx_path)
+        if activity_type:
+            return activity_type
+        
+        # 3. Default fallback
+        return 'running'
+    
+    def _get_activity_type_from_metadata(self, track) -> str:
+        """Extract activity type from GPX metadata and extensions"""
+        
+        # Check Garmin extensions
+        for ext in track.findall('.//gpxtpx:TrackPointExtension', self.ns):
+            # Some Garmin devices store sport type
+            sport = ext.find('gpxtpx:sport', self.ns)
+            if sport is not None:
+                return self._normalize_activity_type(sport.text)
+        
+        # Check generic GPX type attribute
+        type_elem = track.find('gpx:type', self.ns)
+        if type_elem is not None:
+            return self._normalize_activity_type(type_elem.text)
+        
+        # Note: We'll skip root metadata check for now since it's complex 
+        # with ElementTree and the most useful info is usually in track elements anyway
+        
+        return None
+    
+    def _get_activity_type_from_filename(self, activity_name: str, gpx_path: str) -> str:
+        """Extract activity type from filename patterns"""
+        
+        # Combine name and path for analysis
+        full_text = f"{activity_name} {gpx_path}".lower()
+        
+        # Common patterns in filenames
+        if any(keyword in full_text for keyword in ['swim', 'swimming', 'pool', 'open-water']):
+            return 'swimming'
+        elif any(keyword in full_text for keyword in ['bike', 'biking', 'cycling', 'cycle', 'mtb']):
+            return 'cycling'  
+        elif any(keyword in full_text for keyword in ['run', 'running', 'jog', 'jogging']):
+            return 'running'
+        elif any(keyword in full_text for keyword in ['walk', 'walking', 'hike', 'hiking']):
+            return 'walking'
+        elif any(keyword in full_text for keyword in ['ski', 'skiing', 'nordic']):
+            return 'skiing'
+        elif any(keyword in full_text for keyword in ['kayak', 'canoe', 'paddle']):
+            return 'paddling'
+        
+        return None
+    
+    def _normalize_activity_type(self, raw_type: str) -> str:
+        """Normalize activity type to our standard types"""
+        if not raw_type:
+            return None
+            
+        raw_type = raw_type.lower().strip()
+        
+        # Map various formats to our standard types
+        type_mapping = {
+            # Running variations
+            'running': 'running', 'run': 'running', 'jog': 'running', 'jogging': 'running',
+            'trail_running': 'running', 'treadmill': 'running',
+            
+            # Cycling variations  
+            'cycling': 'cycling', 'bike': 'cycling', 'biking': 'cycling', 'bicycle': 'cycling',
+            'mountain_biking': 'cycling', 'road_cycling': 'cycling', 'mtb': 'cycling',
+            
+            # Swimming variations
+            'swimming': 'swimming', 'swim': 'swimming', 'pool_swimming': 'swimming', 
+            'open_water_swimming': 'swimming', 'openwater': 'swimming',
+            
+            # Walking variations
+            'walking': 'walking', 'walk': 'walking', 'hiking': 'walking', 'hike': 'walking',
+            'trekking': 'walking', 'trek': 'walking',
+            
+            # Other activities
+            'skiing': 'skiing', 'ski': 'skiing', 'nordic_skiing': 'skiing',
+            'kayaking': 'paddling', 'kayak': 'paddling', 'canoeing': 'paddling', 'canoe': 'paddling',
+            'paddling': 'paddling', 'paddle': 'paddling'
+        }
+        
+        return type_mapping.get(raw_type, raw_type)
     
     def _detect_hr_outliers(self, trackpoints_data: List[Dict]):
         """Mark HR outliers for exclusion from analysis"""
