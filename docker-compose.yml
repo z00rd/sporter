@@ -26,6 +26,26 @@ services:
     networks:
       - sporter-net
 
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://dev:dev@postgres:5432/sporter
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - uploads:/app/uploads
+    working_dir: /app
+    networks:
+      - sporter-net
+    profiles:
+      - api
+
   migrate:
     build: 
       context: .
@@ -46,6 +66,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads:
 
 networks:
   sporter-net:
