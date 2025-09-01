@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sporter - GPX Analysis</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>🏃‍♂️ Sporter</h1>
+        <p>GPX Training Analysis Platform</p>
+    </div>
+    
+    <div class="upload-section">
+        <h2>Upload GPX File</h2>
+        <form id="uploadForm" class="upload-form" enctype="multipart/form-data">
+            <input type="file" id="gpxFile" accept=".gpx" required>
+            <button type="submit" class="btn">Upload & Import</button>
+            <div id="loading" class="loading">Importing GPX...</div>
+        </form>
+        <div id="uploadResult"></div>
+    </div>
+    
+    <div class="main-content">
+        <div class="left-panel">
+            <h2>Recent Activities</h2>
+            <div id="activitiesFeed">Loading activities...</div>
+        </div>
+        <div class="right-panel">
+            <div id="activityDetail" class="detail-placeholder">
+                Select an activity to view details
+            </div>
+        </div>
+    </div>
+
+    <!-- Load modular JavaScript components -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/fileUpload.js"></script>
+    <script src="/static/js/activityFeed.js"></script>
+    <script src="/static/js/activityDetail.js"></script>
+    
+    <script>
+        // Initialize components on page load
+        window.activityFeed = activityFeed;
+        activityFeed.loadActivities();
+    </script>
+</body>
+</html>
