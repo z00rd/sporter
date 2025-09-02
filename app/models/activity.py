@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP, DECIMAL, func
+from sqlalchemy import Column, Integer, String, TIMESTAMP, DECIMAL, ForeignKey, func
 from sqlalchemy.orm import relationship
 from ..core.database import Base
 
@@ -6,6 +6,7 @@ class Activity(Base):
     __tablename__ = "activities"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Optional for now
     name = Column(String(255))
     activity_type = Column(String(50))  # 'running', 'cycling', 'walking', 'hiking'
     start_time = Column(TIMESTAMP(timezone=True))
@@ -30,6 +31,7 @@ class Activity(Base):
     updated_at = Column(TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now())
     
     # Relationships
+    user = relationship("User", back_populates="activities")
     trackpoints = relationship("Trackpoint", back_populates="activity", cascade="all, delete-orphan")
     analysis_segments = relationship("AnalysisSegment", back_populates="activity", cascade="all, delete-orphan")
     analytics_cache = relationship("AnalyticsCache", back_populates="activity", cascade="all, delete-orphan")

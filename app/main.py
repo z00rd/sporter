@@ -2,11 +2,13 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from .api.activities import router as activities_router
+from .api.users import router as users_router
 
 app = FastAPI(title="Sporter", description="GPX Training Analysis Platform")
 
 # Include API routes
 app.include_router(activities_router)
+app.include_router(users_router)
 
 # Serve static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

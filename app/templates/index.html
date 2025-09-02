@@ -5,11 +5,26 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="/static/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
     <div class="header">
-        <h1>🏃‍♂️ Sporter</h1>
-        <p>GPX Training Analysis Platform</p>
+        <div class="header-content">
+            <div class="header-main">
+                <h1>🏃‍♂️ Sporter</h1>
+                <p>GPX Training Analysis Platform</p>
+            </div>
+            <div class="header-controls">
+                <div class="user-info">
+                    <label for="user-select">Current User:</label>
+                    <select id="user-select" class="user-select">
+                        <option value="">Loading users...</option>
+                    </select>
+                </div>
+                <button id="settings-button" class="btn btn-secondary">⚙️ Settings</button>
+            </div>
+        </div>
     </div>
     
     <div class="upload-section">
@@ -34,16 +49,110 @@
         </div>
     </div>
 
-    <!-- Load modular JavaScript components -->
+    <!-- Load modular JavaScript components in dependency order -->
+    <script src="/static/js/events.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/component.js"></script>
     <script src="/static/js/utils.js"></script>
+    <script src="/static/js/hrChart.js"></script>
+    <script src="/static/js/userSettings.js"></script>
     <script src="/static/js/fileUpload.js"></script>
     <script src="/static/js/activityFeed.js"></script>
     <script src="/static/js/activityDetail.js"></script>
     
     <script>
-        // Initialize components on page load
-        window.activityFeed = activityFeed;
-        activityFeed.loadActivities();
+        // Initialize application
+        document.addEventListener('DOMContentLoaded', function() {
+            // Create component instances
+            activityFeed = new ActivityFeed();
+            activityDetail = new ActivityDetail();
+            fileUpload = new FileUpload();
+            userSettings = new UserSettings();
+            
+            // Make global references available (for debugging/testing)
+            window.activityFeed = activityFeed;
+            window.activityDetail = activityDetail;
+            window.fileUpload = fileUpload;
+            window.userSettings = userSettings;
+            
+            // Setup settings button
+            const settingsButton = document.getElementById('settings-button');
+            if (settingsButton) {
+                settingsButton.addEventListener('click', () => {
+                    eventBus.emit(Events.SHOW_USER_SETTINGS);
+                });
+            }
+            
+            // Setup user selection dropdown
+            const userSelect = document.getElementById('user-select');
+            if (userSelect) {
+                loadUsersDropdown();
+                
+                userSelect.addEventListener('change', async (e) => {
+                    const userId = e.target.value;
+                    if (userId) {
+                        try {
+                            // Save selected user to localStorage
+                            localStorage.setItem('sporter_selected_user_id', userId);
+                            
+                            const user = await api.getUser(userId);
+                            eventBus.emit(Events.USER_PROFILE_UPDATED, { user });
+                        } catch (error) {
+                            console.error('Failed to load user:', error);
+                        }
+                    }
+                });
+            }
+            
+            // Update user display when profile changes
+            eventBus.on(Events.USER_PROFILE_LOADED, (data) => {
+                updateUserSelect(data.user);
+            });
+            
+            eventBus.on(Events.USER_PROFILE_UPDATED, (data) => {
+                updateUserSelect(data.user);
+            });
+            
+            async function loadUsersDropdown() {
+                try {
+                    const users = await api.getUsers();
+                    const defaultUser = await api.getDefaultUser();
+                    
+                    // Check for saved user preference
+                    const savedUserId = localStorage.getItem('sporter_selected_user_id');
+                    let selectedUser = defaultUser;
+                    
+                    if (savedUserId) {
+                        // Find the saved user in the users list
+                        const savedUser = users.find(u => u.id.toString() === savedUserId);
+                        if (savedUser) {
+                            selectedUser = savedUser;
+                        }
+                    }
+                    
+                    userSelect.innerHTML = users.map(user => 
+                        `<option value="${user.id}" ${selectedUser.id === user.id ? 'selected' : ''}>
+                            ${user.name}${user.email ? ` (${user.email})` : ''}
+                        </option>`
+                    ).join('');
+                    
+                    eventBus.emit(Events.USER_PROFILE_LOADED, { user: selectedUser });
+                } catch (error) {
+                    console.error('Failed to load users:', error);
+                    userSelect.innerHTML = '<option value="">Error loading users</option>';
+                }
+            }
+            
+            function updateUserSelect(user) {
+                if (user && userSelect) {
+                    userSelect.value = user.id;
+                    // Save to localStorage when updated programmatically
+                    localStorage.setItem('sporter_selected_user_id', user.id.toString());
+                }
+            }
+            
+            // Load initial data will happen when ActivityFeed initializes
+        });
     </script>
 </body>
 </html>

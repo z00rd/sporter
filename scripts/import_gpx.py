@@ -304,16 +304,23 @@ class GPXParser:
         if len(hr_trackpoints) < 10:  # Not enough data for outlier detection
             return
         
-        # Strategy 1: Exclude first N minutes (startup period)
-        startup_minutes = 3  # configurable
+        # Calculate overall average HR for the entire activity
+        overall_avg_hr = sum(tp['heart_rate'] for tp in hr_trackpoints) / len(hr_trackpoints)
+        
+        # Strategy 1: Smart startup exclusion - exclude points in first 5 minutes that are above overall average
+        startup_minutes = 5  # Look at first 5 minutes
         start_time = trackpoints_data[0]['recorded_at']
         
         for tp in hr_trackpoints:
             time_since_start = (tp['recorded_at'] - start_time).total_seconds()
             
             if time_since_start < startup_minutes * 60:
-                tp['exclude_from_hr_analysis'] = True
-                tp['exclusion_reason'] = 'hr_startup'
+                # In first 5 minutes: exclude only if HR > overall average (likely sensor errors/spikes)
+                if tp['heart_rate'] > overall_avg_hr:
+                    tp['exclude_from_hr_analysis'] = True
+                    tp['exclusion_reason'] = 'hr_startup'
+                else:
+                    tp['exclude_from_hr_analysis'] = False  # Keep normal warm-up HR
             else:
                 tp['exclude_from_hr_analysis'] = False
         
@@ -367,6 +374,7 @@ class GPXImporter:
         
         # Create Activity record
         activity = Activity(
+            user_id=user_id,
             name=data['activity']['name'],
             activity_type=data['activity']['activity_type'],
             start_time=data['activity']['start_time'],
