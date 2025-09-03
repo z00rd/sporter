@@ -138,8 +138,7 @@ class ActivityDetail extends Component {
                     <div id="heart-rate-container" class="chart-container">
                         <div class="detail-placeholder">
                             <p>💓 Heart Rate Chart</p>
-                            <p>HR over time with exclusion visualization</p>
-                            <button class="btn" data-action="load-heart-rate">Load HR Chart</button>
+                            <p>Chart will load automatically when you select this tab</p>
                         </div>
                     </div>
                     <div id="hr-exclusion-controls" class="hr-exclusion-controls" style="display: none;">
@@ -190,9 +189,6 @@ class ActivityDetail extends Component {
                     case 'load-map':
                         this.loadMap();
                         break;
-                    case 'load-heart-rate':
-                        this.loadHeartRate();
-                        break;
                     case 'load-elevation':
                         this.loadElevation();
                         break;
@@ -234,6 +230,13 @@ class ActivityDetail extends Component {
         if (content) content.classList.add('active');
         
         this.activeComponent = componentName;
+        
+        // Auto-load content when switching to specific tabs
+        if (componentName === 'heart-rate' && this.currentActivity) {
+            this.loadHeartRate();
+        } else if (componentName === 'elevation' && this.currentActivity) {
+            this.loadElevation();
+        }
         
         // Emit event for analytics/tracking
         this.emit(Events.COMPONENT_TAB_CHANGED, { 
