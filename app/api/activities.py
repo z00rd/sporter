@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, text
 from typing import List, Optional
@@ -526,8 +526,16 @@ async def get_exclusion_ranges(activity_id: int):
         }
 
 @router.post("/{activity_id}/hr-exclusions/ranges")
-async def create_exclusion_range(activity_id: int, range_data: ExclusionRangeCreate):
+async def create_exclusion_range(activity_id: int, request: Request):
     """Create a new exclusion range for an activity"""
+    # Get raw request body
+    body = await request.body()
+    
+    try:
+        request_data = json.loads(body.decode('utf-8'))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid JSON in request body")
+    
     with get_sync_session() as db:
         from ..models import ExclusionRange
         
@@ -536,20 +544,36 @@ async def create_exclusion_range(activity_id: int, range_data: ExclusionRangeCre
         if not activity:
             raise HTTPException(status_code=404, detail="Activity not found")
         
-        # Additional validation: ensure end_time > start_time
-        if range_data.start_time_seconds >= range_data.end_time_seconds:
-            raise HTTPException(
-                status_code=400, 
-                detail="start_time_seconds must be less than end_time_seconds"
-            )
+        # Extract values from request dict
+        start_time = request_data.get('start_time_seconds')
+        end_time = request_data.get('end_time_seconds')
+        reason = request_data.get('reason', 'User exclusion')
+        
+        # Manual validation
+        if start_time is None or end_time is None:
+            raise HTTPException(status_code=400, detail="start_time_seconds and end_time_seconds are required")
+        
+        # Convert to integers
+        try:
+            start_time = int(start_time)
+            end_time = int(end_time)
+        except (ValueError, TypeError) as e:
+            raise HTTPException(status_code=400, detail="start_time_seconds and end_time_seconds must be integers")
+        
+        # Additional validation
+        if start_time < 0:
+            raise HTTPException(status_code=400, detail="start_time_seconds must be >= 0")
+        
+        if start_time >= end_time:
+            raise HTTPException(status_code=400, detail="start_time_seconds must be less than end_time_seconds")
         
         try:
             # Create new exclusion range
             new_range = ExclusionRange(
                 activity_id=activity_id,
-                start_time_seconds=range_data.start_time_seconds,
-                end_time_seconds=range_data.end_time_seconds,
-                reason=range_data.reason[:100] if range_data.reason else None,  # Truncate to max length
+                start_time_seconds=start_time,
+                end_time_seconds=end_time,
+                reason=reason[:100] if reason else None,  # Truncate to max length
                 exclusion_type='user_range'
             )
             
