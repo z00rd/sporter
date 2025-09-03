@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, text
 from typing import List, Optional
+from pydantic import BaseModel, Field
 import tempfile
 import os
+import json
 
 from ..core.database import get_sync_session
 from ..models.activity import Activity
@@ -11,6 +13,16 @@ from ..models.trackpoint import Trackpoint
 from ..services.gpx_service import GPXService
 
 router = APIRouter(prefix="/api/v1/activities", tags=["activities"])
+
+# Pydantic models
+class ExclusionRangeCreate(BaseModel):
+    start_time_seconds: int = Field(..., ge=0, description="Start time in seconds from activity start")
+    end_time_seconds: int = Field(..., gt=0, description="End time in seconds from activity start") 
+    reason: Optional[str] = Field(None, max_length=100, description="Optional reason for exclusion")
+    
+    class Config:
+        # Allow extra fields to be ignored (more flexible)
+        extra = "ignore"
 
 @router.get("/")
 async def get_activities(user_id: Optional[int] = None):
@@ -200,6 +212,8 @@ async def get_activity_trackpoints(activity_id: int, limit: Optional[int] = None
 async def get_activity_heart_rate(activity_id: int):
     """Get heart rate data for chart visualization"""
     with get_sync_session() as db:
+        from ..models import ExclusionRange
+        
         activity = db.query(Activity).filter(Activity.id == activity_id).first()
         if not activity:
             raise HTTPException(status_code=404, detail="Activity not found")
@@ -209,26 +223,84 @@ async def get_activity_heart_rate(activity_id: int):
             Trackpoint.heart_rate.isnot(None)
         ).order_by(Trackpoint.point_order).all()
         
+        if not trackpoints:
+            return {
+                "activity_id": activity_id,
+                "total_points": 0,
+                "data": [],
+                "stats": {
+                    "avg_hr": None,
+                    "max_hr": None,
+                    "min_hr": None,
+                    "valid_hr_points": 0,
+                    "total_hr_points": 0,
+                    "excluded_points": 0,
+                    "exclusion_breakdown": {
+                        "hr_startup": 0,
+                        "hr_statistical_outlier": 0,
+                        "range_exclusions": 0,
+                        "other": 0
+                    }
+                }
+            }
+        
+        # Get all exclusion ranges
+        exclusion_ranges = db.query(ExclusionRange).filter(
+            ExclusionRange.activity_id == activity_id
+        ).all()
+        
+        start_time = trackpoints[0].recorded_at
+        
+        # Build data points with combined exclusion logic
+        data_points = []
+        range_excluded_count = 0
+        
+        for tp in trackpoints:
+            time_seconds = (tp.recorded_at - start_time).total_seconds() if tp.recorded_at and start_time else 0
+            
+            # Check if point is excluded by range
+            excluded_by_range = any(
+                range_obj.start_time_seconds <= time_seconds <= range_obj.end_time_seconds
+                for range_obj in exclusion_ranges
+            )
+            
+            # Determine final exclusion status and reason
+            excluded = tp.exclude_from_hr_analysis or excluded_by_range
+            exclusion_reason = tp.exclusion_reason
+            
+            if excluded_by_range and not tp.exclude_from_hr_analysis:
+                range_excluded_count += 1
+                # Find the range that excludes this point for the reason
+                excluding_range = next(
+                    (r for r in exclusion_ranges 
+                     if r.start_time_seconds <= time_seconds <= r.end_time_seconds),
+                    None
+                )
+                exclusion_reason = f"Range: {excluding_range.reason}" if excluding_range and excluding_range.reason else "Range exclusion"
+            
+            data_points.append({
+                "time_seconds": time_seconds,
+                "heart_rate": tp.heart_rate,
+                "point_order": tp.point_order,
+                "excluded": excluded,
+                "exclusion_reason": exclusion_reason
+            })
+        
         return {
             "activity_id": activity_id,
             "total_points": len(trackpoints),
-            "data": [{
-                "time_seconds": (tp.recorded_at - trackpoints[0].recorded_at).total_seconds() if tp.recorded_at and trackpoints[0].recorded_at else 0,
-                "heart_rate": tp.heart_rate,
-                "point_order": tp.point_order,
-                "excluded": tp.exclude_from_hr_analysis,
-                "exclusion_reason": tp.exclusion_reason
-            } for tp in trackpoints],
+            "data": data_points,
             "stats": {
                 "avg_hr": activity.avg_heart_rate,
                 "max_hr": activity.max_heart_rate,
                 "min_hr": activity.min_heart_rate,
                 "valid_hr_points": activity.valid_hr_trackpoints,
                 "total_hr_points": len(trackpoints),
-                "excluded_points": len([tp for tp in trackpoints if tp.exclude_from_hr_analysis]),
+                "excluded_points": len([tp for tp in trackpoints if tp.exclude_from_hr_analysis]) + range_excluded_count,
                 "exclusion_breakdown": {
                     "hr_startup": len([tp for tp in trackpoints if tp.exclusion_reason == 'hr_startup']),
                     "hr_statistical_outlier": len([tp for tp in trackpoints if tp.exclusion_reason == 'hr_statistical_outlier']),
+                    "range_exclusions": range_excluded_count,
                     "other": len([tp for tp in trackpoints if tp.exclude_from_hr_analysis and tp.exclusion_reason not in ['hr_startup', 'hr_statistical_outlier']])
                 }
             }
@@ -403,3 +475,190 @@ async def reapply_hr_exclusions(activity_id: int):
                 "valid_hr_points": activity.valid_hr_trackpoints
             }
         }
+
+# Exclusion Range Management Endpoints
+
+@router.get("/{activity_id}/hr-exclusions/ranges")
+async def get_exclusion_ranges(activity_id: int):
+    """Get all exclusion ranges for an activity"""
+    with get_sync_session() as db:
+        from ..models import ExclusionRange
+        
+        activity = db.query(Activity).filter(Activity.id == activity_id).first()
+        if not activity:
+            raise HTTPException(status_code=404, detail="Activity not found")
+        
+        # Get all exclusion ranges for this activity
+        ranges = db.query(ExclusionRange).filter(
+            ExclusionRange.activity_id == activity_id
+        ).order_by(ExclusionRange.start_time_seconds).all()
+        
+        # Count affected points for each range
+        range_data = []
+        for range_obj in ranges:
+            # Count trackpoints that fall within this range
+            trackpoints_in_range = db.execute(text("""
+                SELECT COUNT(*) 
+                FROM trackpoints 
+                WHERE activity_id = :activity_id 
+                AND heart_rate IS NOT NULL
+                AND EXTRACT(EPOCH FROM (recorded_at - (SELECT recorded_at FROM trackpoints WHERE activity_id = :activity_id ORDER BY point_order LIMIT 1))) 
+                    BETWEEN :start_time AND :end_time
+            """), {
+                'activity_id': activity_id,
+                'start_time': range_obj.start_time_seconds,
+                'end_time': range_obj.end_time_seconds
+            }).scalar()
+            
+            range_data.append({
+                'id': range_obj.id,
+                'start_time_seconds': range_obj.start_time_seconds,
+                'end_time_seconds': range_obj.end_time_seconds,
+                'reason': range_obj.reason,
+                'exclusion_type': range_obj.exclusion_type,
+                'points_affected': trackpoints_in_range or 0,
+                'created_at': range_obj.created_at.isoformat() if range_obj.created_at else None
+            })
+        
+        return {
+            'activity_id': activity_id,
+            'ranges': range_data
+        }
+
+@router.post("/{activity_id}/hr-exclusions/ranges")
+async def create_exclusion_range(activity_id: int, range_data: ExclusionRangeCreate):
+    """Create a new exclusion range for an activity"""
+    with get_sync_session() as db:
+        from ..models import ExclusionRange
+        
+        # Verify activity exists
+        activity = db.query(Activity).filter(Activity.id == activity_id).first()
+        if not activity:
+            raise HTTPException(status_code=404, detail="Activity not found")
+        
+        # Additional validation: ensure end_time > start_time
+        if range_data.start_time_seconds >= range_data.end_time_seconds:
+            raise HTTPException(
+                status_code=400, 
+                detail="start_time_seconds must be less than end_time_seconds"
+            )
+        
+        try:
+            # Create new exclusion range
+            new_range = ExclusionRange(
+                activity_id=activity_id,
+                start_time_seconds=range_data.start_time_seconds,
+                end_time_seconds=range_data.end_time_seconds,
+                reason=range_data.reason[:100] if range_data.reason else None,  # Truncate to max length
+                exclusion_type='user_range'
+            )
+            
+            db.add(new_range)
+            db.commit()
+            db.refresh(new_range)
+            
+            # Recalculate activity HR statistics
+            await _recalculate_activity_hr_stats(activity_id, db)
+            
+            return {
+                'success': True,
+                'range': {
+                    'id': new_range.id,
+                    'start_time_seconds': new_range.start_time_seconds,
+                    'end_time_seconds': new_range.end_time_seconds,
+                    'reason': new_range.reason,
+                    'exclusion_type': new_range.exclusion_type
+                }
+            }
+            
+        except Exception as e:
+            db.rollback()
+            if "uq_exclusion_ranges_activity_time_type" in str(e):
+                raise HTTPException(status_code=400, detail="Exclusion range with these times already exists")
+            raise HTTPException(status_code=500, detail=f"Failed to create exclusion range: {str(e)}")
+
+@router.delete("/{activity_id}/hr-exclusions/ranges/{range_id}")
+async def delete_exclusion_range(activity_id: int, range_id: int):
+    """Delete an exclusion range"""
+    with get_sync_session() as db:
+        from ..models import ExclusionRange
+        
+        activity = db.query(Activity).filter(Activity.id == activity_id).first()
+        if not activity:
+            raise HTTPException(status_code=404, detail="Activity not found")
+        
+        range_obj = db.query(ExclusionRange).filter(
+            ExclusionRange.id == range_id,
+            ExclusionRange.activity_id == activity_id
+        ).first()
+        
+        if not range_obj:
+            raise HTTPException(status_code=404, detail="Exclusion range not found")
+        
+        # Only allow deletion of user-created ranges
+        if range_obj.exclusion_type != 'user_range':
+            raise HTTPException(status_code=403, detail="Cannot delete system-generated exclusion ranges")
+        
+        db.delete(range_obj)
+        db.commit()
+        
+        # Recalculate activity HR statistics
+        await _recalculate_activity_hr_stats(activity_id, db)
+        
+        return {
+            'success': True,
+            'message': f'Deleted exclusion range {range_obj.start_time_seconds}-{range_obj.end_time_seconds}s'
+        }
+
+async def _recalculate_activity_hr_stats(activity_id: int, db):
+    """Helper function to recalculate HR statistics considering both point and range exclusions"""
+    from ..models import ExclusionRange
+    
+    # Get all trackpoints with HR data
+    trackpoints = db.query(Trackpoint).filter(
+        Trackpoint.activity_id == activity_id,
+        Trackpoint.heart_rate.isnot(None)
+    ).order_by(Trackpoint.point_order).all()
+    
+    if not trackpoints:
+        return
+        
+    # Get activity start time
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    start_time = trackpoints[0].recorded_at
+    
+    # Get all exclusion ranges
+    exclusion_ranges = db.query(ExclusionRange).filter(
+        ExclusionRange.activity_id == activity_id
+    ).all()
+    
+    # Determine which points are excluded
+    valid_hr_values = []
+    for tp in trackpoints:
+        # Check if point is excluded by individual exclusion
+        if tp.exclude_from_hr_analysis:
+            continue
+            
+        # Check if point is excluded by range exclusion
+        point_time = (tp.recorded_at - start_time).total_seconds()
+        excluded_by_range = any(
+            range_obj.start_time_seconds <= point_time <= range_obj.end_time_seconds
+            for range_obj in exclusion_ranges
+        )
+        
+        if not excluded_by_range:
+            valid_hr_values.append(tp.heart_rate)
+    
+    # Update activity statistics
+    if valid_hr_values:
+        activity.avg_heart_rate = int(sum(valid_hr_values) / len(valid_hr_values))
+        activity.max_heart_rate = max(valid_hr_values)
+        activity.min_heart_rate = min(valid_hr_values)
+        activity.valid_hr_trackpoints = len(valid_hr_values)
+    else:
+        activity.avg_heart_rate = None
+        activity.max_heart_rate = None
+        activity.min_heart_rate = None
+        activity.valid_hr_trackpoints = 0
+        
+    db.commit()

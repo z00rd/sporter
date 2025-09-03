@@ -56,12 +56,15 @@ class HRChart {
         };
     }
 
-    async render(hrData) {
+    async render(hrData, userExclusionRanges = []) {
         this.canvas = document.getElementById(this.canvasId);
         if (!this.canvas || !hrData?.data?.length) {
             console.warn('Cannot render HR chart: missing canvas or data');
             return;
         }
+
+        // Store exclusion ranges for annotations
+        this.userExclusionRanges = userExclusionRanges;
 
         // Destroy existing chart
         if (this.chart) {
@@ -93,8 +96,8 @@ class HRChart {
                     y: point.heart_rate,
                     pointData: point // Store original data for tooltip
                 })),
-                borderColor: 'rgb(220, 53, 69)',
-                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                borderColor: 'rgb(0, 0, 0)', // Black for included points
+                backgroundColor: 'rgba(0, 0, 0, 0.1)',
                 borderWidth: 2,
                 pointRadius: 1,
                 pointHoverRadius: 4,
@@ -112,8 +115,8 @@ class HRChart {
                     y: point.heart_rate,
                     pointData: point // Store original data for tooltip
                 })),
-                borderColor: 'rgba(108, 117, 125, 0.5)',
-                backgroundColor: 'rgba(108, 117, 125, 0.3)',
+                borderColor: 'rgba(220, 53, 69, 0.8)', // Red for excluded points
+                backgroundColor: 'rgba(220, 53, 69, 0.3)',
                 borderWidth: 1,
                 pointRadius: 2,
                 pointHoverRadius: 5,
@@ -241,6 +244,29 @@ class HRChart {
                 }
             };
         });
+
+        // Add user exclusion ranges as red overlay bands
+        if (this.userExclusionRanges && this.userExclusionRanges.length > 0) {
+            this.userExclusionRanges.forEach((range, index) => {
+                annotations[`user_range_${range.id}`] = {
+                    type: 'box',
+                    xMin: range.start_time_seconds / 60,  // Convert seconds to minutes
+                    xMax: range.end_time_seconds / 60,
+                    backgroundColor: 'rgba(220, 53, 69, 0.2)', // Semi-transparent red
+                    borderColor: 'rgba(220, 53, 69, 0.6)',
+                    borderWidth: 1,
+                    label: {
+                        display: true,
+                        content: `🚫 ${range.reason || 'User exclusion'}`,
+                        position: 'start',
+                        yAdjust: 10 + (index * 15), // Stack labels vertically
+                        backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                        color: 'white',
+                        font: { size: 9 }
+                    }
+                };
+            });
+        }
 
         return annotations;
     }

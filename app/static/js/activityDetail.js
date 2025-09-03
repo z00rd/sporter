@@ -295,6 +295,10 @@ class ActivityDetail extends Component {
             
             const hrData = await api.getHeartRateData(this.currentActivity.id);
             
+            // Get exclusion ranges for chart visualization
+            const rangesResponse = await api.getExclusionRanges(this.currentActivity.id);
+            const userExclusionRanges = rangesResponse.ranges || [];
+            
             // Create chart canvas
             container.innerHTML = `
                 <div class="chart-header">
@@ -314,7 +318,7 @@ class ActivityDetail extends Component {
             }
             
             this.hrChart = new HRChart('hr-chart-canvas', this.userProfile);
-            await this.hrChart.render(hrData);
+            await this.hrChart.render(hrData, userExclusionRanges);
             
             // Show statistics and exclusion controls
             this.displayHRStats(hrData, statsContainer);
@@ -436,25 +440,28 @@ class ActivityDetail extends Component {
         }
     }
 
-    displayExclusionControls(hrData) {
+    async displayExclusionControls(hrData) {
         const container = this.element.querySelector('#hr-exclusion-controls');
         if (!container || !hrData?.data) return;
 
-        // Get current user exclusion ranges (will load from backend later)
-        const userExclusionRanges = this.getUserExclusionRanges() || [];
-        
-        // Get system exclusion ranges based on current data
-        const systemExclusionRanges = this.getSystemExclusionRanges(hrData);
-        
-        this.renderExclusionRangesList(userExclusionRanges, systemExclusionRanges);
-        container.style.display = 'block';
+        try {
+            // Get exclusion ranges from backend
+            const rangesResponse = await api.getExclusionRanges(this.currentActivity.id);
+            const userExclusionRanges = rangesResponse.ranges || [];
+            
+            // Get system exclusion ranges based on current data (automatic exclusions summary)
+            const systemExclusionRanges = this.getSystemExclusionRanges(hrData);
+            
+            this.renderExclusionRangesList(userExclusionRanges, systemExclusionRanges);
+            container.style.display = 'block';
+        } catch (error) {
+            console.error('Failed to load exclusion ranges:', error);
+            // Show controls anyway with empty ranges
+            this.renderExclusionRangesList([], []);
+            container.style.display = 'block';
+        }
     }
 
-    getUserExclusionRanges() {
-        // TODO: Load from backend/localStorage for this activity
-        // For now return empty array
-        return [];
-    }
 
     getSystemExclusionRanges(hrData) {
         const ranges = [];
@@ -499,47 +506,53 @@ class ActivityDetail extends Component {
         const listContainer = this.element.querySelector('#exclusion-ranges-list');
         if (!listContainer) return;
 
-        const allRanges = [...userRanges, ...systemRanges];
-        
-        if (allRanges.length === 0) {
-            listContainer.innerHTML = '<p class="no-ranges">No exclusion ranges defined</p>';
-            return;
-        }
-
-        const reasonLabels = {
-            'hr_startup': 'Startup period',
-            'hr_statistical_outlier': 'Statistical outlier',
-            'invalid_hr': 'Invalid HR value'
-        };
-
-        listContainer.innerHTML = allRanges.map((range, index) => {
-            const startMin = Math.floor(range.startTime);
-            const startSec = Math.round((range.startTime % 1) * 60);
-            const endMin = Math.floor(range.endTime);
-            const endSec = Math.round((range.endTime % 1) * 60);
-            
-            const startTimeStr = `${startMin}:${startSec.toString().padStart(2, '0')}`;
-            const endTimeStr = `${endMin}:${endSec.toString().padStart(2, '0')}`;
-            const reasonLabel = reasonLabels[range.reason] || range.reason || 'User defined';
-            
-            const isSystem = range.isSystem;
-            const rangeClass = isSystem ? 'system-range' : 'user-range';
-            
-            return `
-                <div class="exclusion-range ${rangeClass}" data-range-index="${index}">
-                    <div class="range-info">
-                        <span class="range-time">${startTimeStr} - ${endTimeStr}</span>
-                        <span class="range-reason">${reasonLabel}</span>
-                        ${isSystem ? '<span class="system-badge">System</span>' : '<span class="user-badge">User</span>'}
-                    </div>
-                    <div class="range-actions">
-                        ${!isSystem ? '<button class="btn-icon" data-action="edit-range" data-range-index="' + index + '">✏️</button>' : ''}
-                        ${!isSystem ? '<button class="btn-icon" data-action="delete-range" data-range-index="' + index + '">❌</button>' : ''}
-                        ${isSystem ? '<button class="btn-icon" data-action="override-range" data-range-index="' + index + '">👤</button>' : ''}
-                    </div>
+        // Render automatic exclusions summary
+        const autoExclusionsHtml = systemRanges.length > 0 ? `
+            <div class="auto-exclusions-summary">
+                <h6>🤖 Automatic Exclusions</h6>
+                <div class="exclusion-summary">${systemRanges.map(range => 
+                    `<span class="exclusion-count">${range.count} ${range.reason}</span>`
+                ).join(', ')}</div>
+                <div class="auto-actions">
+                    <button class="btn btn-small" data-action="clear-auto-exclusions">Clear All Auto</button>
+                    <button class="btn btn-small" data-action="reapply-auto-exclusions">Re-run Auto</button>
                 </div>
-            `;
-        }).join('');
+            </div>
+        ` : '';
+
+        // Render user ranges
+        const userRangesHtml = userRanges.length > 0 ? `
+            <div class="user-ranges-section">
+                <h6>👤 User Ranges</h6>
+                ${userRanges.map(range => {
+                    const startMin = Math.floor(range.start_time_seconds / 60);
+                    const startSec = range.start_time_seconds % 60;
+                    const endMin = Math.floor(range.end_time_seconds / 60);
+                    const endSec = range.end_time_seconds % 60;
+                    
+                    const startTimeStr = `${startMin}:${startSec.toString().padStart(2, '0')}`;
+                    const endTimeStr = `${endMin}:${endSec.toString().padStart(2, '0')}`;
+                    
+                    return `
+                        <div class="exclusion-range user-range" data-range-id="${range.id}">
+                            <div class="range-info">
+                                <span class="range-time">${startTimeStr} - ${endTimeStr}</span>
+                                <span class="range-reason">${range.reason || 'User exclusion'}</span>
+                                <span class="points-count">${range.points_affected} points</span>
+                            </div>
+                            <div class="range-actions">
+                                <button class="btn-icon" data-action="delete-range" data-range-id="${range.id}" title="Delete range">❌</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        ` : '';
+
+        const noRangesHtml = userRanges.length === 0 && systemRanges.length === 0 ? 
+            '<p class="no-ranges">No exclusion ranges defined</p>' : '';
+
+        listContainer.innerHTML = autoExclusionsHtml + userRangesHtml + noRangesHtml;
         
         // Add event listeners for range actions
         this.setupRangeActionListeners();
@@ -553,17 +566,17 @@ class ActivityDetail extends Component {
                 e.stopPropagation();
                 
                 const action = e.target.dataset.action;
-                const rangeIndex = parseInt(e.target.dataset.rangeIndex);
+                const rangeId = e.target.dataset.rangeId;
                 
                 switch (action) {
-                    case 'edit-range':
-                        this.editExclusionRange(rangeIndex);
-                        break;
                     case 'delete-range':
-                        this.deleteExclusionRange(rangeIndex);
+                        this.deleteExclusionRange(rangeId);
                         break;
-                    case 'override-range':
-                        this.overrideSystemRange(rangeIndex);
+                    case 'clear-auto-exclusions':
+                        this.clearAutoExclusions();
+                        break;
+                    case 'reapply-auto-exclusions':
+                        this.reapplyAutoExclusions();
                         break;
                 }
             });
@@ -574,23 +587,50 @@ class ActivityDetail extends Component {
         this.showExclusionRangeDialog();
     }
 
-    editExclusionRange(rangeIndex) {
-        // TODO: Load user range data and show edit dialog
-        this.showExclusionRangeDialog(rangeIndex);
-    }
 
-    deleteExclusionRange(rangeIndex) {
+    async deleteExclusionRange(rangeId) {
         if (confirm('Are you sure you want to delete this exclusion range?')) {
-            // TODO: Delete from backend and refresh
-            console.log('Delete range:', rangeIndex);
-            this.refreshExclusionControls();
+            try {
+                this.showLoading('Deleting exclusion range...');
+                await api.deleteExclusionRange(this.currentActivity.id, rangeId);
+                this.emit(Events.SUCCESS_MESSAGE, { message: 'Exclusion range deleted successfully!' });
+                await this.refreshExclusionControls();
+            } catch (error) {
+                this.handleError(error, ' while deleting exclusion range');
+            } finally {
+                this.hideLoading();
+            }
         }
     }
 
-    overrideSystemRange(rangeIndex) {
-        // TODO: Convert system range to user range for editing
-        console.log('Override system range:', rangeIndex);
-        this.showExclusionRangeDialog(rangeIndex, true);
+    async clearAutoExclusions() {
+        if (confirm('Clear all automatic exclusions? This will remove startup and outlier detection.')) {
+            try {
+                this.showLoading('Clearing automatic exclusions...');
+                await api.clearHRExclusions(this.currentActivity.id);
+                this.emit(Events.SUCCESS_MESSAGE, { message: 'Automatic exclusions cleared!' });
+                await this.refreshExclusionControls();
+            } catch (error) {
+                this.handleError(error, ' while clearing automatic exclusions');
+            } finally {
+                this.hideLoading();
+            }
+        }
+    }
+
+    async reapplyAutoExclusions() {
+        if (confirm('Re-run automatic exclusion detection? This will clear existing auto-exclusions and re-analyze.')) {
+            try {
+                this.showLoading('Re-running automatic detection...');
+                await api.reapplyHRExclusions(this.currentActivity.id);
+                this.emit(Events.SUCCESS_MESSAGE, { message: 'Automatic exclusions updated!' });
+                await this.refreshExclusionControls();
+            } catch (error) {
+                this.handleError(error, ' while re-applying automatic exclusions');
+            } finally {
+                this.hideLoading();
+            }
+        }
     }
 
     showExclusionRangeDialog(rangeIndex = null, isOverride = false) {
@@ -610,12 +650,33 @@ class ActivityDetail extends Component {
                 return;
             }
             
-            // TODO: Save to backend and refresh
-            console.log('Save exclusion range:', { startTime, endTime, reason });
-            this.refreshExclusionControls();
+            // Save to backend
+            this.createExclusionRange(startTime, endTime, reason);
             
         } catch (error) {
             alert('Invalid time format. Use MM:SS (e.g., 2:30)');
+        }
+    }
+
+    async createExclusionRange(startTimeSeconds, endTimeSeconds, reason) {
+        try {
+            this.showLoading('Creating exclusion range...');
+            
+            const rangeData = {
+                start_time_seconds: startTimeSeconds,
+                end_time_seconds: endTimeSeconds,
+                reason: reason || 'User exclusion'
+            };
+            
+            
+            await api.createExclusionRange(this.currentActivity.id, rangeData);
+            this.emit(Events.SUCCESS_MESSAGE, { message: 'Exclusion range created successfully!' });
+            await this.refreshExclusionControls();
+            
+        } catch (error) {
+            this.handleError(error, ' while creating exclusion range');
+        } finally {
+            this.hideLoading();
         }
     }
 
@@ -630,7 +691,7 @@ class ActivityDetail extends Component {
             throw new Error('Invalid time values');
         }
         
-        return minutes + (seconds / 60);
+        return (minutes * 60) + seconds; // Return total seconds
     }
 
     refreshExclusionControls() {

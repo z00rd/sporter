@@ -105,6 +105,19 @@ class ApiClient {
         return this.post(`/activities/${activityId}/hr-exclusions/reapply`);
     }
 
+    // Exclusion Range methods
+    async getExclusionRanges(activityId) {
+        return this.get(`/activities/${activityId}/hr-exclusions/ranges`);
+    }
+
+    async createExclusionRange(activityId, rangeData) {
+        return this.post(`/activities/${activityId}/hr-exclusions/ranges`, rangeData);
+    }
+
+    async deleteExclusionRange(activityId, rangeId) {
+        return this.delete(`/activities/${activityId}/hr-exclusions/ranges/${rangeId}`);
+    }
+
     async deleteActivity(activityId) {
         return this.delete(`/activities/${activityId}`);
     }
