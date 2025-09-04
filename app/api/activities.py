@@ -111,12 +111,16 @@ async def upload_gpx(file: UploadFile = File(...), user_id: Optional[int] = Form
             )
     
     try:
-        # Save uploaded file temporarily
-        os.makedirs("uploads", exist_ok=True)
-        temp_file_path = f"uploads/{file.filename}"
+        # Secure file upload with proper validation
+        from ..core.security import secure_file_upload, validate_gpx_content
         
+        # Validate and get secure filename
+        secure_filename, temp_file_path = await secure_file_upload(file)
+        
+        # File content already validated by secure_file_upload
+        # Write content to secure temporary path
+        content = await file.read()
         with open(temp_file_path, "wb") as buffer:
-            content = await file.read()
             buffer.write(content)
         
         # Import using GPX service

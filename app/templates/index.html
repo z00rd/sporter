@@ -45,6 +45,7 @@
     <!-- Load modular JavaScript components in dependency order -->
     <script src="/static/js/events.js"></script>
     <script src="/static/js/config.js"></script>
+    <script src="/static/js/auth.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/component.js"></script>
     <script src="/static/js/utils.js"></script>
@@ -64,6 +65,36 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded, starting initialization...');
             
+            // Listen for authentication events instead of checking synchronously
+            eventBus.on('auth:user-loaded', (data) => {
+                console.log('Auth event received:', data);
+                if (data.user && data.user.is_approved) {
+                    console.log('User authenticated and approved, initializing app...');
+                    initializeApp();
+                } else if (data.user && !data.user.is_approved) {
+                    console.log('User not approved, showing pending screen');
+                    authManager.showPendingApprovalMessage();
+                } else {
+                    console.log('User not authenticated, showing login screen');
+                    authManager.showLoginScreen();
+                }
+            });
+            
+            // Check if user is already authenticated (in case auth completes before this listener is set up)
+            if (authManager.isAuthenticated) {
+                if (authManager.isApproved) {
+                    console.log('User already authenticated and approved, initializing app...');
+                    initializeApp();
+                } else {
+                    console.log('User already authenticated but not approved, showing pending screen');
+                    authManager.showPendingApprovalMessage();
+                }
+            } else {
+                console.log('Waiting for authentication...');
+            }
+        });
+        
+        function initializeApp() {
             // Declare variables at function scope
             let navigation, pageRouter;
             
@@ -219,9 +250,7 @@
                     localStorage.setItem('sporter_selected_user_id', user.id.toString());
                 }
             }
-            
-            // Initial page is now handled by pageRouter.showInitialPage() above
-        });
+        }
     </script>
 </body>
 </html>
