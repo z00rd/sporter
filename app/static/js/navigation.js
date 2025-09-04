@@ -6,13 +6,8 @@ class Navigation extends Component {
         super('navigation', true);
         
         // Initialize properties AFTER calling super()
-        this.currentPage = 'activities'; // Default page
-        this.pages = [
-            { id: 'activities', label: 'Activities', icon: '📊' },
-            { id: 'analytics', label: 'Analytics', icon: '📈' },
-            { id: 'users', label: 'Users', icon: '👥' },
-            { id: 'settings', label: 'Settings', icon: '⚙️' }
-        ];
+        this.currentPage = Config.DEFAULT_PAGE;
+        this.pages = Config.NAVIGATION_PAGES;
         
         // Now manually call init with properties properly set
         this.init();
@@ -26,11 +21,8 @@ class Navigation extends Component {
             return;
         }
         
-        console.log('Navigation init called, element:', this.element);
         this.render();
-        console.log('Navigation rendered');
         this.setupEventListeners();
-        console.log('Navigation event listeners setup');
         
         // Check for hash navigation on page load
         this.handleHashChange();

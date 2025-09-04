@@ -92,8 +92,11 @@ Heart rate: 132 avg, 143 max
 # Start database
 docker-compose up -d postgres
 
-# Run migrations  
+# Run migrations (ALWAYS from container!)
 docker-compose --profile migration up migrate
+
+# Create new migration (ALWAYS from container!)
+docker-compose exec api alembic revision -m "Migration description"
 
 # Import GPX
 ./scripts/docker_import.sh "path/to/file.gpx"

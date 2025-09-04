@@ -2,8 +2,8 @@
 
 class ApiClient {
     constructor() {
-        this.baseUrl = '/api/v1';
-        this.timeout = 30000; // 30 seconds
+        this.baseUrl = Config.API_BASE_URL;
+        this.timeout = Config.API_TIMEOUT;
     }
 
     async _request(endpoint, options = {}) {

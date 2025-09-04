@@ -35,3 +35,4 @@ class Activity(Base):
     trackpoints = relationship("Trackpoint", back_populates="activity", cascade="all, delete-orphan")
     analysis_segments = relationship("AnalysisSegment", back_populates="activity", cascade="all, delete-orphan")
     analytics_cache = relationship("AnalyticsCache", back_populates="activity", cascade="all, delete-orphan")
+    exclusion_ranges = relationship("ExclusionRange", back_populates="activity", cascade="all, delete-orphan")

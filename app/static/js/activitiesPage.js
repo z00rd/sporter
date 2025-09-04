@@ -57,8 +57,6 @@ class ActivitiesPage extends Page {
 
     onShow() {
         // Refresh activities when page becomes visible
-        console.log('Activities page shown');
-        console.log('Activities page element content:', this.element ? this.element.innerHTML.substring(0, 100) : 'NO ELEMENT');
         
         if (this.activityFeed && this.activityFeed.loadActivities) {
             this.activityFeed.loadActivities();

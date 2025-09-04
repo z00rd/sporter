@@ -45,7 +45,6 @@ class UserSettings extends Component {
         }
 
         const user = this.currentUser || {};
-        console.log('UserSettings: render() user data:', user);
         
         this.setContent(`
             <div class="modal-header">
@@ -160,17 +159,7 @@ class UserSettings extends Component {
     }
 
     renderActivityTypeOptions(selected = 'running') {
-        const types = [
-            { value: 'running', label: '🏃‍♂️ Running' },
-            { value: 'cycling', label: '🚴‍♂️ Cycling' },
-            { value: 'swimming', label: '🏊‍♂️ Swimming' },
-            { value: 'walking', label: '🚶‍♂️ Walking' },
-            { value: 'hiking', label: '🥾 Hiking' },
-            { value: 'skiing', label: '⛷️ Skiing' },
-            { value: 'paddling', label: '🚣‍♂️ Paddling' }
-        ];
-
-        return types.map(type => 
+        return Config.ACTIVITY_TYPES.map(type => 
             `<option value="${type.value}" ${selected === type.value ? 'selected' : ''}>
                 ${type.label}
             </option>`
@@ -268,18 +257,11 @@ class UserSettings extends Component {
             return;
         }
 
-        const hrReserve = hrMax - hrResting;
-        const zones = [
-            { name: 'Recovery', min: hrResting, max: Math.round(hrResting + (hrReserve * 0.6)), color: '#6c757d' },
-            { name: 'Aerobic', min: Math.round(hrResting + (hrReserve * 0.6)), max: Math.round(hrResting + (hrReserve * 0.7)), color: '#28a745' },
-            { name: 'Tempo', min: Math.round(hrResting + (hrReserve * 0.7)), max: Math.round(hrResting + (hrReserve * 0.8)), color: '#ffc107' },
-            { name: 'Threshold', min: Math.round(hrResting + (hrReserve * 0.8)), max: Math.round(hrResting + (hrReserve * 0.9)), color: '#fd7e14' },
-            { name: 'VO2 Max', min: Math.round(hrResting + (hrReserve * 0.9)), max: hrMax, color: '#dc3545' }
-        ];
+        const zones = Config.calculateHRZones(hrMax, hrResting);
 
         previewContainer.innerHTML = `
             <div class="zones-preview-grid">
-                ${zones.map(zone => `
+                ${Object.values(zones).map(zone => `
                     <div class="zone-preview" style="border-left: 4px solid ${zone.color}">
                         <div class="zone-name">${zone.name}</div>
                         <div class="zone-range">${zone.min}-${zone.max} bpm</div>

@@ -81,7 +81,6 @@ class PageRouter extends Component {
         // The router doesn't render its own content,
         // it just manages the visibility of page containers that are appended to it
         // Don't call setContent() as it would destroy any child page elements
-        console.log('PageRouter render() called - not replacing content to preserve page elements');
     }
 
     getCurrentPage() {
@@ -123,13 +122,10 @@ class Page extends Component {
     // Override Component's init to handle dynamic element creation
     init() {
         // Don't try to find existing element - we'll create it in render()
-        console.log(`Page ${this.pageId} init() called`);
         this.render();
     }
 
     render() {
-        console.log(`Page ${this.pageId} render() called, element exists:`, !!this.element);
-        
         // Create page container if it doesn't exist
         if (!this.element) {
             const container = document.createElement('div');
@@ -142,13 +138,6 @@ class Page extends Component {
             if (router) {
                 router.appendChild(container);
                 this.element = container;
-                console.log(`Page ${this.pageId} appended to router. Router children:`, router.children.length);
-                
-                // Styling will be handled by CSS
-                // container.style.border = '2px solid red';
-                // container.style.background = 'yellow';
-                // container.style.padding = '10px';
-                // container.style.margin = '5px';
             } else {
                 console.error('Page router container not found');
                 return;

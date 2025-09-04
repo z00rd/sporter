@@ -6,6 +6,7 @@ class Component {
         this.element = null;
         this.isDestroyed = false;
         this.eventUnsubscribers = [];
+        this.domListeners = []; // Track DOM event listeners for cleanup
         
         // Call init() unless explicitly skipped by subclass
         if (!skipAutoInit) {
@@ -30,6 +31,16 @@ class Component {
 
     render() {
         // Override in subclasses
+    }
+
+    // Enhanced DOM event listener management
+    addDomListener(element, event, handler) {
+        if (!element || this.isDestroyed) return null;
+        
+        const boundHandler = handler.bind(this);
+        element.addEventListener(event, boundHandler);
+        this.domListeners.push({ element, event, handler: boundHandler });
+        return boundHandler;
     }
 
     // Safe DOM manipulation methods
@@ -112,9 +123,17 @@ class Component {
         this.emit(Events.LOADING_END, { component: this.constructor.name });
     }
 
-    // Cleanup
+    // Enhanced cleanup with DOM listener management
     destroy() {
         this.isDestroyed = true;
+        
+        // Clean up DOM event listeners to prevent memory leaks
+        this.domListeners.forEach(({ element, event, handler }) => {
+            if (element && element.removeEventListener) {
+                element.removeEventListener(event, handler);
+            }
+        });
+        this.domListeners = [];
         
         // Unsubscribe from all events
         this.eventUnsubscribers.forEach(unsubscribe => unsubscribe());

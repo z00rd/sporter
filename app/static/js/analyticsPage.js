@@ -146,8 +146,6 @@ class AnalyticsPage extends Page {
 
     onShow() {
         // Could load some preview data or statistics here
-        console.log('Analytics page shown');
-        console.log('Analytics page element content:', this.element ? this.element.innerHTML.substring(0, 100) : 'NO ELEMENT');
     }
 
     onHide() {

@@ -2,34 +2,16 @@
 
 // Activity type utilities
 function getActivityIcon(activityType) {
-    const icons = {
-        'running': '🏃‍♂️',
-        'cycling': '🚴‍♂️', 
-        'swimming': '🏊‍♂️',
-        'walking': '🚶‍♂️',
-        'skiing': '⛷️',
-        'paddling': '🚣‍♂️',
-        'hiking': '🥾'
-    };
-    return icons[activityType] || '🏃‍♂️';
+    return Config.getActivityIcon(activityType);
 }
 
 function getActivityTypeLabel(activityType) {
-    const labels = {
-        'running': 'Running',
-        'cycling': 'Cycling', 
-        'swimming': 'Swimming',
-        'walking': 'Walking',
-        'skiing': 'Skiing',
-        'paddling': 'Paddling',
-        'hiking': 'Hiking'
-    };
-    return labels[activityType] || 'Running';
+    return Config.getActivityLabel(activityType);
 }
 
 // Date formatting
 function formatDate(dateString) {
-    return new Date(dateString).toLocaleDateString('en-GB');
+    return new Date(dateString).toLocaleDateString(Config.DATE_FORMAT);
 }
 
 function formatTime(dateString) {
@@ -48,38 +30,16 @@ function calculatePace(durationSeconds, distanceKm) {
     return durationSeconds / 60 / distanceKm;
 }
 
-// API utilities
+// Deprecated API utilities - use api.js ApiClient instead
+// These are kept for backward compatibility but should be replaced
 async function apiGet(endpoint) {
-    try {
-        const response = await fetch(endpoint);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        return await response.json();
-    } catch (error) {
-        console.error(`API GET error for ${endpoint}:`, error);
-        throw error;
-    }
+    console.warn('apiGet() is deprecated. Use api.get() instead.');
+    return api.get(endpoint.replace('/api/v1', ''));
 }
 
 async function apiPost(endpoint, formData) {
-    try {
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.detail || `HTTP ${response.status}`);
-        }
-        
-        return data;
-    } catch (error) {
-        console.error(`API POST error for ${endpoint}:`, error);
-        throw error;
-    }
+    console.warn('apiPost() is deprecated. Use api.post() instead.');
+    return api.post(endpoint.replace('/api/v1', ''), formData);
 }
 
 // DOM utilities
