@@ -65,10 +65,16 @@ def verify_token(token: str) -> TokenData:
     
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
+        
+        user_id_str: str = payload.get("sub")
         email: str = payload.get("email")
         
-        if user_id is None:
+        if user_id_str is None:
+            raise credentials_exception
+        
+        try:
+            user_id = int(user_id_str)
+        except (ValueError, TypeError):
             raise credentials_exception
             
         token_data = TokenData(user_id=user_id, email=email)
@@ -146,7 +152,7 @@ def create_user_token(user: User) -> str:
     """Create JWT token for user"""
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id, "email": user.email, "name": user.name},
+        data={"sub": str(user.id), "email": user.email, "name": user.name},
         expires_delta=access_token_expires
     )
     return access_token

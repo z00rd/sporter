@@ -10,7 +10,7 @@ class AuthManager {
         this.init();
     }
 
-    init() {
+    async init() {
         // Check for token in URL (from OAuth redirect)
         this.handleOAuthCallback();
         
@@ -19,7 +19,13 @@ class AuthManager {
         
         // Verify token if exists
         if (this.token) {
-            this.verifyToken();
+            const isValid = await this.verifyToken();
+            
+            if (!isValid) {
+                this.showLoginScreen();
+            }
+        } else {
+            this.showLoginScreen();
         }
         
         this.setupEventListeners();
