@@ -27,26 +27,14 @@
         </div>
     </div>
     
-    <div class="upload-section">
-        <h2>Upload GPX File</h2>
-        <form id="uploadForm" class="upload-form" enctype="multipart/form-data">
-            <input type="file" id="gpxFile" accept=".gpx" required>
-            <button type="submit" class="btn">Upload & Import</button>
-            <div id="loading" class="loading">Importing GPX...</div>
-        </form>
-        <div id="uploadResult"></div>
+    <!-- Navigation Tabs -->
+    <div id="navigation">
+        <!-- Navigation component will be rendered here -->
     </div>
     
-    <div class="main-content">
-        <div class="left-panel">
-            <h2>Recent Activities</h2>
-            <div id="activitiesFeed">Loading activities...</div>
-        </div>
-        <div class="right-panel">
-            <div id="activityDetail" class="detail-placeholder">
-                Select an activity to view details
-            </div>
-        </div>
+    <!-- Page Container -->
+    <div id="page-router">
+        <!-- Individual pages will be rendered here by the page router -->
     </div>
 
     <!-- Load modular JavaScript components in dependency order -->
@@ -59,21 +47,96 @@
     <script src="/static/js/fileUpload.js"></script>
     <script src="/static/js/activityFeed.js"></script>
     <script src="/static/js/activityDetail.js"></script>
+    <script src="/static/js/navigation.js"></script>
+    <script src="/static/js/pageRouter.js"></script>
+    <script src="/static/js/activitiesPage.js"></script>
+    <script src="/static/js/analyticsPage.js"></script>
+    <script src="/static/js/usersPage.js"></script>
     
     <script>
-        // Initialize application
+        // Initialize application with new navigation system
         document.addEventListener('DOMContentLoaded', function() {
-            // Create component instances
-            activityFeed = new ActivityFeed();
-            activityDetail = new ActivityDetail();
-            fileUpload = new FileUpload();
-            userSettings = new UserSettings();
+            console.log('DOM loaded, starting initialization...');
             
-            // Make global references available (for debugging/testing)
-            window.activityFeed = activityFeed;
-            window.activityDetail = activityDetail;
-            window.fileUpload = fileUpload;
-            window.userSettings = userSettings;
+            // Declare variables at function scope
+            let navigation, pageRouter;
+            
+            try {
+                // Create navigation and page router
+                console.log('Creating navigation and page router...');
+                const navEl = document.getElementById('navigation');
+                const routerEl = document.getElementById('page-router');
+                console.log('Navigation element:', navEl);
+                console.log('Page router element:', routerEl);
+                
+                if (navEl) {
+                    console.log('Navigation element HTML:', navEl.innerHTML);
+                } else {
+                    console.error('Navigation element NOT FOUND!');
+                }
+                
+                if (routerEl) {
+                    console.log('Router element found');
+                } else {
+                    console.error('Router element NOT FOUND!');
+                }
+                
+                navigation = new Navigation();
+                console.log('Navigation created:', navigation);
+                pageRouter = new PageRouter();
+                console.log('PageRouter created:', pageRouter);
+                
+                // Create page instances
+                console.log('Creating page instances...');
+                activitiesPage = new ActivitiesPage();
+                analyticsPage = new AnalyticsPage();
+                usersPage = new UsersPage();
+                
+                // Create shared components
+                console.log('Creating shared components...');
+                userSettings = new UserSettings();
+                
+                // Register pages with the router
+                console.log('Registering pages with router...');
+                pageRouter.registerPage('activities', activitiesPage);
+                console.log('Registered activities page');
+                pageRouter.registerPage('analytics', analyticsPage);
+                console.log('Registered analytics page');
+                pageRouter.registerPage('users', usersPage);
+                console.log('Registered users page');
+                
+                // For now, register settings page as analytics until we create a proper settings page
+                pageRouter.registerPage('settings', analyticsPage);
+                console.log('Registered settings page (using analytics placeholder)');
+                
+                // Initialize navigation and router
+                console.log('Initializing navigation and router...');
+                navigation.init();
+                pageRouter.init();
+                
+                // Pages are already initialized by their constructors
+                console.log('Pages created and initialized');
+                
+                // Clear any existing hash and show initial page
+                console.log('Clearing hash and showing initial page...');
+                window.location.hash = '';
+                pageRouter.showInitialPage();
+                
+                // Navigation system is now working!
+                
+                console.log('All components initialized successfully');
+                
+                // Make global references available (for debugging/testing)
+                window.navigation = navigation;
+                window.pageRouter = pageRouter;
+                window.activitiesPage = activitiesPage;
+                window.analyticsPage = analyticsPage;
+                window.usersPage = usersPage;
+                window.userSettings = userSettings;
+                
+            } catch (error) {
+                console.error('Error during initialization:', error);
+            }
             
             // Setup settings button
             const settingsButton = document.getElementById('settings-button');
@@ -151,7 +214,7 @@
                 }
             }
             
-            // Load initial data will happen when ActivityFeed initializes
+            // Initial page is now handled by pageRouter.showInitialPage() above
         });
     </script>
 </body>

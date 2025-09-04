@@ -139,6 +139,10 @@ class ApiClient {
         return this.put(`/users/${userId}`, userData);
     }
 
+    async deleteUser(userId) {
+        return this.delete(`/users/${userId}`);
+    }
+
     async getUserHRZones(userId) {
         return this.get(`/users/${userId}/hr-zones`);
     }

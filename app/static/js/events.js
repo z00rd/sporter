@@ -70,6 +70,9 @@ const Events = {
     // Component events
     COMPONENT_TAB_CHANGED: 'component:tab:changed',
     
+    // Navigation events
+    PAGE_CHANGED: 'navigation:page:changed',
+    
     // User events
     SHOW_USER_SETTINGS: 'user:show:settings',
     USER_PROFILE_LOADED: 'user:profile:loaded',

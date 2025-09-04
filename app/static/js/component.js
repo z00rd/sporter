@@ -1,13 +1,16 @@
 // Sporter - Base Component Class
 
 class Component {
-    constructor(elementId) {
+    constructor(elementId, skipAutoInit = false) {
         this.elementId = elementId;
         this.element = null;
         this.isDestroyed = false;
         this.eventUnsubscribers = [];
         
-        this.init();
+        // Call init() unless explicitly skipped by subclass
+        if (!skipAutoInit) {
+            this.init();
+        }
     }
 
     init() {
