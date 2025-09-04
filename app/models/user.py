@@ -21,6 +21,12 @@ class User(Base):
     # Settings
     use_metric_units = Column(Boolean, default=True)  # True = km/kg, False = miles/lbs
     
+    # OAuth fields
+    google_id = Column(String(255), unique=True, nullable=True, index=True)  # Google OAuth ID
+    is_approved = Column(Boolean, default=False)  # Admin approval required
+    approved_by = Column(Integer, nullable=True)  # ID of admin who approved
+    approved_at = Column(DateTime, nullable=True)  # When was approved
+    
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

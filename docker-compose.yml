@@ -33,6 +33,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+psycopg2://dev:dev@postgres:5432/sporter
     ports:
