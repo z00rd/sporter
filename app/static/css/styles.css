@@ -26,6 +26,25 @@ body {
     text-align: left;
 }
 
+.repo-link {
+    margin-top: 8px;
+}
+
+.repo-link a {
+    color: #0066cc;
+    text-decoration: none;
+    font-size: 0.85em;
+    padding: 2px 8px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.repo-link a:hover {
+    color: #004499;
+    background-color: #f0f7ff;
+    text-decoration: underline;
+}
+
 .header-controls {
     display: flex;
     align-items: center;
